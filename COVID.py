@@ -80,9 +80,9 @@ io.save("Mut_clean.pdb", select=RemoveLigandSet(Mut_remove))
 is from the Omicron structure. This is to help us know about why some ligands have
 higher affinity and some don't on AutoDock Vina"""
 
-# Path to cleaned files
+# Path to cleaned files (Mut_clean is from the modeller software!)
 wt_path = "WT_clean.pdb"
-mut_path = "Mut_clean.pdb"
+mut_path = "Mut_clean.B99990001.pdb"
 
 # Load the structures
 clean_WT_structure = parser.get_structure("WT", wt_path)
@@ -102,7 +102,13 @@ clean_Mut_structure = remove_nonA_chains(clean_Mut_structure)
 
 # Confirms I am using chain 1 for both
 WT_chain = clean_WT_structure[0]["A"]
-Mut_chain = clean_Mut_structure[0]["A"]
+# Attempt to get chain A first, then fallback to blank chain (keep getting errors)
+if "A" in clean_Mut_structure[0]:
+    Mut_chain = clean_Mut_structure[0]["A"]
+elif " " in clean_Mut_structure[0]:
+    Mut_chain = clean_Mut_structure[0][" "]
+else:
+    raise ValueError("No chain A or blank chain found in mutant structure")
 
 # Get alpha carbons (CA is alpha carbon in Bio.PDB)
 def get_CA_atoms(chain):
@@ -111,19 +117,6 @@ def get_CA_atoms(chain):
 # Extracts alpha carbons
 WT_CA = get_CA_atoms(WT_chain)
 Mut_CA = get_CA_atoms(Mut_chain)
-
-# Makes the chains the same length (as the smaller chain) to avoid errors
-def match_ca_by_resnum(WT_chain, Mut_chain):
-    wt_ca = {res.id[1]: res['CA'] for res in WT_chain if 'CA' in res}
-    mut_ca = {res.id[1]: res['CA'] for res in Mut_chain if 'CA' in res}
-    shared_residues = sorted(set(wt_ca.keys()) & set(mut_ca.keys()))
-
-    wt_list = [wt_ca[i] for i in shared_residues]
-    mut_list = [mut_ca[i] for i in shared_residues]
-
-    return wt_list, mut_list
-
-WT_CA, Mut_CA = match_ca_by_resnum(WT_chain, Mut_chain)
 
 # Aligns the chains as accurately as possible to avoid overestimated RMSD values (important!)
 super_imposer = Superimposer()
@@ -148,4 +141,14 @@ print("Global RMSD:", super_imposer.rms, "Å")
 
 """Active site RMSD (His41-Cys145)"""
 
-print("Hello GitHub")
+# Catalytic dyad residue IDs
+active_ids = [41, 145]
+
+# This function will allow me to extract alpha carbons for specific residues in a chain
+def get_specific_residues(chain, ids):
+    atoms = []
+    for residue in chain:
+        if residue.id[1] in ids and "CA" in residue:
+            atoms.append(residue["CA"])
+    return atoms
+
