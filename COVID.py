@@ -138,13 +138,6 @@ def get_matching_heavy_atoms(chain1, chain2, res_ids=None):
 
     return atoms1, atoms2
 
-# This function calculates RMSD for given chains or specific residues
-def calc_rmsd(chain1, chain2, res_ids=None):
-    atoms1, atoms2 = get_matching_heavy_atoms(chain1, chain2, res_ids)
-    sup = Superimposer()
-    sup.set_atoms(atoms1, atoms2)
-    return sup.rms
-
 """Amino Acid Sequences"""
 
 # Print amino acid sequence
@@ -159,6 +152,13 @@ for pp in ppb.build_peptides(clean_Mut_structure):
     print(pp.get_sequence())
 
 """RMSD (Root Mean Square Deviation) Calculations"""
+
+# This function calculates RMSD for given chains or specific residues
+def calc_rmsd(chain1, chain2, res_ids=None):
+    atoms1, atoms2 = get_matching_heavy_atoms(chain1, chain2, res_ids)
+    sup = Superimposer()
+    sup.set_atoms(atoms1, atoms2)
+    return sup.rms
 
 """Global RMSD"""
 
@@ -179,6 +179,45 @@ print("Mutation Site RMSD:", mutation_rmsd)
 # A mutation site RMSD of 0.538 shows that the proline to histidine mutation
 # has a very small impact structurally. However, this alone doesn't tell us
 # about the functionalities it might change
+
+"""Per-Residue RMSD"""
+
+def per_residue_rmsd_heavy(chain1, chain2):
+    rmsd_per_residue = []
+
+    # get all shared residue IDs
+    res_ids1 = [res.id[1] for res in chain1]
+    res_ids2 = [res.id[1] for res in chain2]
+    shared_ids = sorted(set(res_ids1) & set(res_ids2))
+
+    for res_id in shared_ids:
+
+        # heavy atoms for this SINGLE residue
+        atoms1, atoms2 = get_matching_heavy_atoms(chain1, chain2, res_ids=[res_id])
+
+        if len(atoms1) == 0 or len(atoms2) == 0:
+            rmsd_per_residue.append((res_id, None))
+            continue
+
+        # local alignment for this residue
+        sup = Superimposer()
+        sup.set_atoms(atoms1, atoms2)
+
+        # sup.rms already computes correct RMSD
+        rmsd = sup.rms
+
+        rmsd_per_residue.append((res_id, rmsd))
+
+    return rmsd_per_residue
+
+results = per_residue_rmsd_heavy(WT_chain, Mut_chain)
+
+for res_id, rmsd in results:
+    print(f"Residue {res_id} RMSD: {rmsd}")
+# Outliers with large RMSD are likely due to high Z-scores indicating high flexibility. This means the residues were likely in different
+# positions simply due to a lack of rigidity instead of actual structural differences. Residue 132 displays a high RMSD despite being rigid,
+# Indicating the mutation causes structural differences without involving probability.
+
 
 """RMSF (Root Mean Square Fluctuation) Calculations"""
 """Disclaimer: This is psuedo RMSF done by Modeller, which creates predicted models.
@@ -329,11 +368,12 @@ print("Standard Deviation:", std)
 z_scores = (rmsf-mean)/std
 
 for i, z in enumerate(z_scores, start=1):
-    print(f"Residue {i}: Z-score = {z}")
+    print(f"Residue {i} Z-score: {z}")
 # For z scores, a value of 0 is balanced, a value of < -1 is quite rigid, and a value
 # of > 1 is quite flexible. To summarize, this data tells me about the secondary structure.
 # Beta-sheets are very rigid, alpha-helices are quite rigid, and loops, turns, and surface
 # regions are very flexible. Areas with high Z-scores/RMSF mean that the RMSD values at these
 # locations have less value, as there is more probability involved. Areas with low
 # Z-scores/RMSF indicate that the RMSD values have more value, as less probability is involved
+
 
